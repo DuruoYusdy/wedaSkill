@@ -175,7 +175,7 @@ python scripts/interface_delta.py build \
 1. 当前框图目标相对旧原理图实现的 Block 增删改 Graphviz 图（`.dot` + `.svg`）。
 2. 变化 Block 在旧原理图中的外围原始信号网络。
 3. 框图 Port—原理图源端 Pin 映射及连接关系变化。
-4. 变化后的信号接口列表（JSON/CSV/Excel）。
+4. 变化后的信号接口列表（JSON/CSV），以及含 `BLOCK_INFO` 和逐新增/变更器件 Sheet 的 `信号接口变更清单.xlsx`。
 
 输出编号代表交付顺序，不改变分析顺序：原始接口仍必须在拓扑差异最终判定之前逆向并冻结。
 
@@ -222,4 +222,4 @@ python scripts/consistency_controller.py report \
 8. 需要 `diagram-logical-connection-mapping` 的新增器件/新增连线任务。
 9. ECO 候选及风险；不得声称已经修改原理图。
 
-同时交付 `middleware-manifest.json` 中登记的四类中间产物。若 Graphviz、原始接口 Excel 或修改后接口 Excel 缺失，必须明确列为未完成，不能只给文字总结代替。
+同时交付 `middleware-manifest.json` 中登记的四类中间产物。若 Graphviz、原始接口 Excel、修改后接口 Excel 或信号接口变更清单 Excel 缺失，必须明确列为未完成，不能只给文字总结代替。

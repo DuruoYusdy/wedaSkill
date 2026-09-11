@@ -176,7 +176,7 @@ python scripts/interface_workbook.py export --state work/book/state.json --outpu
 node scripts/export_interfaces.mjs work/book/model.json outputs/interfaces work/book/previews
 ```
 
-输出两个独立文件：`outputs/interfaces/原始信号接口.xlsx` 和 `outputs/interfaces/修改后信号接口.xlsx`。每个文件有自己的 BLOCK_INFO 和逐器件页签，每页只包含当前版本接口表，不再在同页上下拼放前后表。
+输出三个独立文件：`outputs/interfaces/原始信号接口.xlsx`、`outputs/interfaces/修改后信号接口.xlsx` 和 `outputs/interfaces/信号接口变更清单.xlsx`。前两个文件保存完整版本快照；第三个文件只保存器件和信号增删改，作为最终评审入口。
 
 修改后列表是目标快照：删除行从该列表移除，原始文件保留原始行，JSON中的 deleted_signals 保留删除血缘和原因。删除大器件仅在原始文件 `原始接口_删除` 留档；修改后文件的 BLOCK_INFO 仍标注删除，但不创建对应接口页。新增器件的原始接口为零行，不从目标需求虚构原始接口。
 
@@ -188,7 +188,22 @@ node scripts/export_interfaces.mjs work/book/model.json outputs/interfaces work/
 
 网络操作映射为 ADD=新增、DELETE=删除、CHANGE=修改、KEEP=保留。原始表显示旧接口对应的删除/修改计划；修改后表显示新增/修改结果。未变行标保留，不硬凑成三种变更。删除器件的原始接口全部标删除；单独删除信号也在原始表显式标删除。操作针对本行的接口/支路，同名网络其他器件仍可能使用，不能据此自动删除全局Net。仅改连接、Pin或外围电阻电容而保持网络名时，仍需提交CHANGE并说明修改内容。原始表的标签和说明由修改记录派生，不改变原始快照哈希。
 
-两份文件的 `BLOCK_INFO` 使用同一分析版本的器件范围和增删改结论，方便对照。源/目的block和汇总block身份都由同一框图JSON索引生成。Excel 是评审快照，不是回写编辑器；手工改 Excel 不会更新控制器。要刷新修改后清单须提交 propose 并重新导出。完整冻结原始数据位于导出 model.json 的 original_snapshot；原始 Excel 表中的映射注释来自独立 mappings。
+三个文件的 `BLOCK_INFO` 使用同一分析版本的器件范围和增删改结论，方便对照。源/目的block和汇总block身份都由同一框图JSON索引生成。Excel 是评审快照，不是回写编辑器；手工改 Excel 不会更新控制器。要刷新修改后清单须提交 propose 并重新导出。完整冻结原始数据位于导出 model.json 的 original_snapshot；原始 Excel 表中的映射注释来自独立 mappings。
+
+### 变更清单工作簿
+
+`信号接口变更清单.xlsx` 的第一页固定为 `BLOCK_INFO`。汇总表至少包含位号、code、类型、block标识、block名称、目标位号、目标code、器件页签和分析说明；类型映射为 ADD=新增、CHANGE=变更、DELETE=删除。
+
+仅为新增和变更大器件创建独立 Sheet。删除大器件保留在 `BLOCK_INFO`，不建立接口 Sheet；其完整原始网络仍由 `原始信号接口.xlsx` 的 `原始接口_删除` 保存。
+
+每个器件 Sheet 仅输出信号操作为 ADD、CHANGE、DELETE 的行，禁止输出 KEEP。表头固定为：
+
+```text
+源block标识、源block名称、源port、目的block标识、目的block名称、目的port、
+原理图pin脚、分析说明、映射置信度、原网络命名、新网络命名、类型
+```
+
+`原理图pin脚` 仍只写源端 Pin 名称。新增行的原网络命名为空；删除行的新网络命名为空；修改行分别从冻结原始记录和修改后记录取网络名。仅变更连接、Pin 或外围器件时，即使两列网络名相同，类型仍为修改。
 
 在有 spreadsheets 技能的环境，按该技能获取已捆绑 Node/模块并渲染检查。可把 exporter 复制到临时运行目录，在该目录创建指向现有 node_modules 的 junction/symlink，再运行；不要改写依赖目录。非 Codex 环境使用已安装的 Node 与 `@oai/artifact-tool`；也可通过 `ARTIFACT_TOOL_MODULE` 指向其公开模块入口。缺少 Excel 依赖时交付 JSON 草稿并明确 Excel 未完成，不能把 CSV 改扩展名冒充 xlsx。
 

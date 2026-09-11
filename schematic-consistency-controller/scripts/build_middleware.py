@@ -177,6 +177,10 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
         paths.append(artifact(Path(args.modified_xlsx)))
     elif args.require_xlsx:
         paths.append({"path": "修改后信号接口.xlsx", "required": True, "status": "MISSING", "bytes": 0, "sha256": None})
+    if args.change_list_xlsx:
+        paths.append(artifact(Path(args.change_list_xlsx)))
+    elif args.require_xlsx:
+        paths.append({"path": "信号接口变更清单.xlsx", "required": True, "status": "MISSING", "bytes": 0, "sha256": None})
     complete = all(not item["required"] or item["status"] == "READY" for item in paths)
     manifest = {
         "schema_version": 1, "analysis_id": state["analysis_id"], "complete": complete,
@@ -185,7 +189,7 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
     }
     write_json(output / "middleware-manifest.json", manifest)
     if args.require_xlsx and not complete:
-        raise ValueError("中间产物未完成：框图拓扑/差异 Graphviz 文件或两份 Excel 缺失；详见 middleware-manifest.json")
+        raise ValueError("中间产物未完成：框图拓扑/差异 Graphviz 文件或三份 Excel 缺失；详见 middleware-manifest.json")
     return manifest
 
 
@@ -211,7 +215,7 @@ def self_test() -> None:
         args = argparse.Namespace(consistency_state=str(root / "state.json"), answer=str(root / "answer.json"),
             diagram_topology_result=str(root / "topology.json"), diagram_topology_dot=str(root / "topology.dot"), diagram_topology_svg=str(root / "topology.svg"),
             block_diff_json=str(root / "block.json"), block_diff_dot=str(root / "block.dot"), block_diff_svg=str(root / "block.svg"),
-            output_dir=str(root / "out"), original_xlsx=None, modified_xlsx=None, require_xlsx=False)
+            output_dir=str(root / "out"), original_xlsx=None, modified_xlsx=None, change_list_xlsx=None, require_xlsx=False)
         manifest = build(args)
         assert manifest["complete"] and manifest["counts"]["changed_block_original_networks"] == 1
         assert manifest["counts"]["mapping_rows"] == 1 and manifest["counts"]["modified_interfaces"] == 1
@@ -234,6 +238,7 @@ def main() -> int:
     parser.add_argument("--output-dir")
     parser.add_argument("--original-xlsx")
     parser.add_argument("--modified-xlsx")
+    parser.add_argument("--change-list-xlsx")
     parser.add_argument("--require-xlsx", action="store_true")
     args = parser.parse_args()
     try:

@@ -20,6 +20,9 @@ FIELDS = ["source_block_id", "source_block_name", "source_port", "destination_bl
           "net_origin", "connection_status", "original_id", "id", "evidence",
           "peripherals", "issues"]
 ACTIONS = {"ADD": "新增", "CHANGE": "修改", "DELETE": "删除", "KEEP": "保留"}
+CHANGE_COLS = ["源block标识", "源block名称", "源port", "目的block标识", "目的block名称",
+               "目的port", "原理图pin脚", "分析说明", "映射置信度", "原网络命名",
+               "新网络命名", "类型"]
 
 
 def pin_names(value):
@@ -377,12 +380,39 @@ def cell(value):
     return "" if value is None else value
 
 
+def change_rows_for_device(state, d, modified):
+    """生成最终信号接口变更清单；不输出KEEP，Pin列只取源端Pin名称。"""
+    if d["action"] == "DELETE":
+        return []
+    modified_by_id = {r["id"]: r for r in modified if r["device_id"] == d["id"]}
+    rows = []
+    for change in state["changes"].values():
+        if change["device_id"] != d["id"]:
+            continue
+        original = state["original"].get(change.get("original_id"))
+        before = observed_view(state, original) if original else None
+        after = modified_by_id.get(change["id"])
+        view = after or before or {}
+        confidence = view.get("mapping_confidence")
+        source_names = pin_names(view.get("source_pin_names", []))
+        old_net = original.get("net_name", "") if original else ""
+        new_net = after.get("net_name", "") if after else ""
+        rows.append([
+            cell(view.get("source_block_id")), cell(view.get("source_block_name")),
+            cell(view.get("source_port")), cell(view.get("destination_block_id")),
+            cell(view.get("destination_block_name")), cell(view.get("destination_port")),
+            ", ".join(source_names), cell(change.get("reason")), cell(confidence),
+            cell(old_net), cell(new_net), ACTIONS[change["action"]],
+        ])
+    return rows
+
+
 def model(state):
     require(state["phase"] == "PROPOSE", "必须先冻结原始接口才能导出前后对照")
     validate_frozen(state)
-    result = {"schema_version": 3, "title": state["manifest"].get("title", "外围信号接口清单"),
+    result = {"schema_version": 4, "title": state["manifest"].get("title", "外围信号接口清单"),
               "source": state["manifest"]["schematic_snapshot"], "target": state["manifest"]["diagram_snapshot"],
-              "baseline_hash": state["baseline_hash"], "columns": COLS, "devices": [],
+              "baseline_hash": state["baseline_hash"], "columns": COLS, "change_columns": CHANGE_COLS, "devices": [],
               "pending": next_actions(state), "original_snapshot": list(state["original"].values()),
               "modified_snapshot": modified_rows(state)}
     used = {"block_info", "原始接口_删除"}
@@ -417,6 +447,7 @@ def model(state):
         item["target_pending"] = sum(1 for p in result["pending"] if p["action"] in {"DECLARE_TARGET_SIGNALS", "RESOLVE_TARGET_SIGNAL"}
                                      and (p.get("device_id") == d["id"] or p.get("target_id") in
                                           {t["id"] for t in state["targets"].values() if t["device_id"] == d["id"]}))
+        item["changes"] = change_rows_for_device(state, d, result["modified_snapshot"])
         result["devices"].append(item)
     return result
 

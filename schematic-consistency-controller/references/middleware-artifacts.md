@@ -110,10 +110,13 @@ python scripts/render_block_diff.py build \
 04_modified_signal_interfaces/
 ├── modified-signal-interface-list.json
 ├── modified-signal-interface-list.csv
-└── 修改后信号接口.xlsx
+├── 修改后信号接口.xlsx
+└── 信号接口变更清单.xlsx
 ```
 
 Excel 使用 `schematic-diff-interface-extractor` 的导出脚本生成，必须包含 `BLOCK_INFO`，并按新增/变更器件建立独立 Sheet。源/目的 Block 标识为 `图页id-block id`，名称逐字来自框图 `name`。
+
+其中 `信号接口变更清单.xlsx` 是精简主表：`BLOCK_INFO` 汇总器件位号、code 和新增/删除/变更；每个新增/变更器件 Sheet 严格使用源/目的 Block 与 Port、源端 Pin 名称、说明、置信度、原/新网络名和信号类型十二列，只包含新增、修改、删除信号。
 
 ## 统一生成和完整性检查
 
@@ -132,10 +135,11 @@ python scripts/build_middleware.py build \
   --output-dir outputs/<analysis-id> \
   --original-xlsx outputs/<analysis-id>/原始信号接口.xlsx \
   --modified-xlsx outputs/<analysis-id>/04_modified_signal_interfaces/修改后信号接口.xlsx \
+  --change-list-xlsx outputs/<analysis-id>/04_modified_signal_interfaces/信号接口变更清单.xlsx \
   --require-xlsx
 ```
 
-输出根目录生成 `middleware-manifest.json`，记录每个文件的大小、SHA-256 和 READY/MISSING 状态。只有 Graphviz SVG、原始接口 Excel、修改后接口 Excel 以及第 2～4 项结构化文件全部 READY 时，`complete` 才能为 `true`。
+输出根目录生成 `middleware-manifest.json`，记录每个文件的大小、SHA-256 和 READY/MISSING 状态。只有 Graphviz SVG、原始接口 Excel、修改后接口 Excel、信号接口变更清单 Excel 以及第 2～4 项结构化文件全部 READY 时，`complete` 才能为 `true`。
 
 推荐目录：
 

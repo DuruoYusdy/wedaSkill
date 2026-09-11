@@ -161,10 +161,17 @@ class Tests(unittest.TestCase):
 
     def test_layout(self):
         data=m.model(built())
+        self.assertEqual(data['schema_version'],4)
         self.assertEqual(len(data['columns']),21)
         self.assertEqual(data['columns'][9],'网络命名')
+        self.assertEqual(data['change_columns'],[
+            '源block标识','源block名称','源port','目的block标识','目的block名称','目的port',
+            '原理图pin脚','分析说明','映射置信度','原网络命名','新网络命名','类型'])
         self.assertEqual(len(data['devices'][1]['before']),0)
         self.assertEqual(len(data['devices'][2]['after']),0)
+        self.assertEqual(data['devices'][0]['changes'][0][9:12],['SPI0_CS0','SPI0_FLASH_CS_N','修改'])
+        self.assertEqual(data['devices'][1]['changes'][0][9:12],['','','新增'])
+        self.assertEqual(data['devices'][2]['changes'],[])
         used=set()
         a=m.sheet_name('A'*35,used); b=m.sheet_name('A'*35,used)
         self.assertNotEqual(a,b)
@@ -200,6 +207,16 @@ class Tests(unittest.TestCase):
         data=m.model(s)
         self.assertEqual(data['devices'][0]['before'][0][13],'删除')
         self.assertFalse(any(r[16]=='O0' for r in data['devices'][0]['after']))
+
+    def test_deleted_signal_visible_in_change_list(self):
+        s=built()
+        m.propose(s,{'changes':[{'id':'DEL-O0','device_id':'DEV-U12','original_id':'O0','action':'DELETE',
+                                'reason':'explicit signal removal','evidence':['synthetic:delete-signal']}]})
+        rows=m.model(s)['devices'][0]['changes']
+        deleted=next(r for r in rows if r[11]=='删除')
+        self.assertEqual(deleted[6],'SPI0_SCK')
+        self.assertEqual(deleted[9],'SPI0_SCLK')
+        self.assertEqual(deleted[10],'')
 
     def test_missing_pin_names_never_extract_from_chain(self):
         manifest,cap,maps,targets,changes=fixture()
@@ -255,6 +272,7 @@ def verify_xlsx(filename):
         workbook=ET.fromstring(archive.read('xl/workbook.xml'))
         names=[s.attrib['name'] for s in workbook.findall('s:sheets/s:sheet',ns)]
         before=Path(filename).name.startswith('原始')
+        changes=Path(filename).name.startswith('信号接口变更')
         expected=['BLOCK_INFO','U12','NEW-SENSOR'] + (['原始接口_删除'] if before else [])
         assert names==expected,names
         strings=[]
@@ -273,6 +291,18 @@ def verify_xlsx(filename):
             return result
         root=ET.fromstring(archive.read('xl/worksheets/sheet2.xml'))
         c=cells(archive.read('xl/worksheets/sheet2.xml'))
+        if changes:
+            assert [c[f'{chr(65+i)}6'] for i in range(12)]==m.CHANGE_COLS
+            assert c['A7']=='0-B12' and c['B7']=='主控'
+            assert c['G7']=='SPI0_CS0'
+            assert float(c['I7'])==0.9
+            assert c['J7']=='SPI0_CS0' and c['K7']=='SPI0_FLASH_CS_N' and c['L7']=='修改'
+            assert root.find('.//s:pane',ns) is not None
+            summary_cells=cells(archive.read('xl/worksheets/sheet1.xml'))
+            assert summary_cells['A6']=='位号' and summary_cells['B6']=='code' and summary_cells['C6']=='类型'
+            assert summary_cells['C7']=='变更' and summary_cells['C8']=='新增' and summary_cells['C9']=='删除'
+            print('XLSX结构验证通过：BLOCK_INFO、逐新增/变更器件页、12列接口变更字段')
+            return
         assert [c[f'{chr(65+i)}6'] for i in range(10)]==m.COLS[:10]
         assert float(c['I7'])==0.9
         assert c['J10']==('SPI0_CS0' if before else 'SPI0_FLASH_CS_N')

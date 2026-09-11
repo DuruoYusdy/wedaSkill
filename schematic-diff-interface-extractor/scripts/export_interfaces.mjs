@@ -9,8 +9,8 @@ if (!input || !outputDir || outputDir.endsWith('.xlsx')) throw new Error('用法
 const moduleName = process.env.ARTIFACT_TOOL_MODULE;
 const { Workbook, SpreadsheetFile } = await import(moduleName ? pathToFileURL(moduleName).href : '@oai/artifact-tool');
 const data = JSON.parse(await fs.readFile(input, 'utf8'));
-if (data.schema_version !== 3) throw new Error('需要v3数据模型：先绑定当前框图JSON再导出');
-for (const [version, label] of [['before', '原始信号接口'], ['after', '修改后信号接口']]) {
+if (data.schema_version !== 4) throw new Error('需要v4数据模型：先绑定当前框图JSON并生成逐信号变更记录再导出');
+for (const [version, label] of [['before', '原始信号接口'], ['after', '修改后信号接口'], ['changes', '信号接口变更清单']]) {
 const output = path.join(outputDir, `${label}.xlsx`);
 const previewDir = previewRoot ? path.join(previewRoot, version) : null;
 const wb = Workbook.create();
@@ -23,7 +23,7 @@ function base(name, title) {
   sh.showGridLines = false;
   sh.getRange('A2').values = [[literal(title)]];
   sh.getRange('A2').format.font = { name: 'Arial', size: 15, bold: true, color: '#20354D' };
-  sh.getRange('A3:J3').format.borders = { bottom: { style: 'thin', color: '#BAC6D3' } };
+  sh.getRange('A3:U3').format.borders = { bottom: { style: 'thin', color: '#BAC6D3' } };
   return sh;
 }
 function table(sh, start, headers, rows, kind) {
@@ -62,24 +62,53 @@ function table(sh, start, headers, rows, kind) {
       const lines = Math.max(1, ...r.map((v, c) => Math.ceil(String(v ?? '').length / ([6, 7, 18, 19, 20].includes(c) ? 35 : 17))));
       sh.getRange(`A${start + index + 1}:${last}${start + index + 1}`).format.rowHeight = Math.max(32, lines * 15);
     });
+  } else if (headers === data.change_columns) {
+    sh.getRange(`A${start}:F${end}`).format.columnWidth = 21;
+    sh.getRange(`G${start}:G${end}`).format.columnWidth = 26;
+    sh.getRange(`H${start}:H${end}`).format.columnWidth = 52;
+    sh.getRange(`I${start + 1}:I${end}`).setNumberFormat('0.0%');
+    sh.getRange(`J${start}:K${end}`).format.columnWidth = 28;
+    sh.getRange(`L${start}:L${end}`).format.columnWidth = 12;
+    for (const [text, fill] of [['新增','#E2F0D9'], ['删除','#FCE4D6'], ['修改','#FFF2CC']]) {
+      sh.getRange(`L${start + 1}:L${end}`).conditionalFormats.add('containsText', {text, format:{fill, font:{bold:true}}});
+    }
+    rows.forEach((r, index) => {
+      const lines = Math.max(1, ...r.map((v, c) => Math.ceil(String(v ?? '').length / ([7, 9, 10].includes(c) ? 35 : 18))));
+      sh.getRange(`A${start + index + 1}:${last}${start + index + 1}`).format.rowHeight = Math.max(32, lines * 15);
+    });
   }
   return end;
 }
 const summary = base('BLOCK_INFO', `${label}（${data.title}）`);
 summary.tabColor = '#20354D';
 summary.getRange('A4').values = [[literal(`原理图：${data.source}；目标框图：${data.target}`)]];
-const summaryHeaders = ['位号', 'code', '操作', 'block标识', 'block名称', '目标位号', '目标code', '原始接口数', '修改后接口数', '待确认行数', '目标缺项数', '原始覆盖', '器件页签', '分析说明'];
-const summaryRows = data.devices.map(d => [d.refdes || '待分配', d.code || '未提供',
-  ({ADD:'新增',CHANGE:'变更',DELETE:'删除'})[d.action], d.block_id || '', d.block_name || '',
-  d.target_refdes || '', d.target_code || '', d.before.length, d.after.length, d.pending_count,
-  d.target_pending, d.coverage, d.action === 'DELETE' && version === 'after' ? '仅见原始表' : d.sheet, d.reason]);
+const summaryHeaders = version === 'changes'
+  ? ['位号', 'code', '类型', 'block标识', 'block名称', '目标位号', '目标code', '器件页签', '分析说明']
+  : ['位号', 'code', '操作', 'block标识', 'block名称', '目标位号', '目标code', '原始接口数', '修改后接口数', '待确认行数', '目标缺项数', '原始覆盖', '器件页签', '分析说明'];
+const summaryRows = version === 'changes'
+  ? data.devices.map(d => [d.refdes || d.target_refdes || '待分配', d.code || d.target_code || '未提供',
+      ({ADD:'新增',CHANGE:'变更',DELETE:'删除'})[d.action], d.block_id || '', d.block_name || '',
+      d.target_refdes || '', d.target_code || '', d.action === 'DELETE' ? '不创建器件页' : d.sheet, d.reason])
+  : data.devices.map(d => [d.refdes || '待分配', d.code || '未提供',
+      ({ADD:'新增',CHANGE:'变更',DELETE:'删除'})[d.action], d.block_id || '', d.block_name || '',
+      d.target_refdes || '', d.target_code || '', d.before.length, d.after.length, d.pending_count,
+      d.target_pending, d.coverage, d.action === 'DELETE' && version === 'after' ? '仅见原始表' : d.sheet, d.reason]);
 table(summary, 6, summaryHeaders, summaryRows, 'after');
-summary.getRange(`N6:N${7 + data.devices.length}`).format.columnWidth = 55;
+summary.getRange(`${version === 'changes' ? 'I' : 'N'}6:${version === 'changes' ? 'I' : 'N'}${7 + data.devices.length}`).format.columnWidth = 55;
 summary.getRange('A4').format.font = { name: 'Arial', size: 10, color: '#566779' };
 previews.push({ name: 'BLOCK_INFO', ranges: ['A1:G10', 'H6:N10'] });
 let deletion;
 let deletionRow = 6;
 for (const d of data.devices) {
+  if (version === 'changes') {
+    if (d.action === 'DELETE') continue;
+    const sh = base(d.sheet, `${d.refdes || d.target_refdes || d.id}  ${d.block_name || ''}  信号接口变更`);
+    sh.getRange('A4').values = [['仅列新增、修改、删除的信号接口；原理图pin脚列只显示源端Pin名称']];
+    const end = table(sh, 6, data.change_columns, d.changes, 'after');
+    sh.freezePanes.freezeRows(6);
+    previews.push({name:d.sheet, ranges:[`A4:L${Math.min(end, 12)}`]});
+    continue;
+  }
   if (d.action === 'DELETE') {
     if (version === 'after') continue;
     if (!deletion) deletion = base('原始接口_删除', '删除器件的原始接口留档');
@@ -96,7 +125,7 @@ for (const d of data.devices) {
   previews.push({name:d.sheet, ranges:[`A4:J${Math.min(end, 11)}`, `K6:U${Math.min(end, 11)}`]});
 }
 wb.recalculate();
-console.log((await wb.inspect({kind:'table',range:'BLOCK_INFO!A6:N10',include:'values,formulas',tableMaxRows:5,tableMaxCols:14,maxChars:3000})).ndjson);
+console.log((await wb.inspect({kind:'table',range:`BLOCK_INFO!A6:${version === 'changes' ? 'I' : 'N'}10`,include:'values,formulas',tableMaxRows:5,tableMaxCols:14,maxChars:3000})).ndjson);
 console.log((await wb.inspect({kind:'match',searchTerm:'#REF!|#DIV/0!|#VALUE!|#NAME\\?|#NUM!',options:{useRegex:true,maxResults:20},maxChars:1000})).ndjson);
 if (previewDir) {
   await fs.mkdir(previewDir, {recursive:true});

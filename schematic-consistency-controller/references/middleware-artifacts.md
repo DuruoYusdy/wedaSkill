@@ -2,6 +2,19 @@
 
 本协议把一次分析拆成可复核、可继续加工的四类中间产物。每个文件必须携带同一个 `analysis_id`；不得混用不同框图快照或不同原理图工程的结果。
 
+## 前置产物：当前框图拓扑图
+
+框图 JSON 完成 Block/Port/Wire 规范化后，立即使用 `render_diagram_topology.py` 和 Graphviz `dot` 生成：
+
+```text
+00_diagram_topology/
+├── diagram-topology-render.json
+├── diagram-topology.dot
+└── diagram-topology.svg
+```
+
+该图只表达当前目标框图的逻辑拓扑，不包含原理图映射或差异推断。它必须在任何原理图查询之前完成。后续第 1 项是加入旧原理图实现对照后的 Block 差异图，两张图不能互相替代。
+
 ## 1. Block 增删改差异图
 
 输入是当前框图与旧原理图实现的对照判定，不是新旧两个框图的比较。使用 `block-differences.json` 明确覆盖自动判断：
@@ -110,6 +123,9 @@ Excel 使用 `schematic-diff-interface-extractor` 的导出脚本生成，必须
 python scripts/build_middleware.py build \
   --consistency-state work/consistency/<analysis-id>/state.json \
   --answer work/consistency/<analysis-id>/answer.json \
+  --diagram-topology-result outputs/<analysis-id>/00_diagram_topology/diagram-topology-render.json \
+  --diagram-topology-dot outputs/<analysis-id>/00_diagram_topology/diagram-topology.dot \
+  --diagram-topology-svg outputs/<analysis-id>/00_diagram_topology/diagram-topology.svg \
   --block-diff-json outputs/<analysis-id>/01_block_diff/block-diff.json \
   --block-diff-dot outputs/<analysis-id>/01_block_diff/block-diff.dot \
   --block-diff-svg outputs/<analysis-id>/01_block_diff/block-diff.svg \
@@ -125,6 +141,7 @@ python scripts/build_middleware.py build \
 
 ```text
 outputs/<analysis-id>/
+├── 00_diagram_topology/
 ├── 01_block_diff/
 ├── 02_changed_block_original_networks/
 ├── 03_port_pin_connection_changes/

@@ -8,7 +8,7 @@ description: 使用确定性 Python 状态机比较当前框图与旧原理图�
 把当前在线框图作为目标设计，把已有原理图作为当前实现。最终链路固定为：
 
 ```text
-框图快照 → Block实现映射 → 原理图原始接口逆向并冻结
+框图快照 → 拓扑解析 → Graphviz渲染 → Block实现映射 → 原理图原始接口逆向并冻结
 → 原始接口与Block/Port映射 → 目标边验证
 → 逐信号增删改判定 → 一份最终答案
 ```
@@ -21,13 +21,15 @@ description: 使用确定性 Python 状态机比较当前框图与旧原理图�
 
 - `querySolutionDesign`：读取当前在线框图 V4 JSON。
 - `tianshu-schematic-dto-analysis`：提供 `get_schematic_summary`、`list_sheets`、CBB/器件查询、`trace_net`、`trace_connection` 和 `chain_check`。
+- Graphviz `dot`：在框图拓扑解析后生成 `.dot` 和 `.svg`。
 - Python 3.10 或更高版本，仅使用标准库。
 
-如果缺少前两项中的任一能力，说明缺失能力，不得伪造分析结果。
+如果缺少 `querySolutionDesign` 或原理图分析能力，说明缺失能力，不得伪造分析结果；如果缺少 Graphviz `dot`，保留已生成的 DOT 并停止在拓扑渲染门禁，不得声称 SVG 已完成。
 
 ## 核心约束
 
 - 所有状态只能通过 `scripts/consistency_controller.py` 更新，不要手工修改状态 JSON。
+- 框图拓扑解析后必须立即运行 `render_diagram_topology.py`；Graphviz 结果未登记时不得开始原理图查询或 Block 映射。
 - 每轮先调用控制器的 `next`，只执行返回的待办动作，再把结构化结果提交给控制器。
 - 原理图接口盘点覆盖全部已映射 Block 对应的器件/CBB，并从其全部信号 Pin 向局部边界追踪；不得只查询框图上名称相似的 Port，也不得只盘点已知差异器件。
 - 名称和模型推理只能产生候选；目标连接必须经过 `chain_check` 才能成为 `VERIFIED`。
@@ -72,7 +74,25 @@ python scripts/consistency_controller.py init \
 - 计算 Block 信息优先级。
 - 创建动作队列、查询预算和证据状态。
 
-### 3. 完成 Block 实现映射
+### 3. 立即渲染当前框图拓扑
+
+初始化后控制器固定进入 `RENDER_DIAGRAM_TOPOLOGY`，在完成 Graphviz 渲染之前不会调度任何原理图查询：
+
+```bash
+python scripts/render_diagram_topology.py build \
+  --state work/consistency/<analysis-id>/state.json \
+  --dot-output outputs/<analysis-id>/00_diagram_topology/diagram-topology.dot \
+  --svg-output outputs/<analysis-id>/00_diagram_topology/diagram-topology.svg \
+  --result-output outputs/<analysis-id>/00_diagram_topology/diagram-topology-render.json
+
+python scripts/consistency_controller.py record-topology-render \
+  --state work/consistency/<analysis-id>/state.json \
+  --input outputs/<analysis-id>/00_diagram_topology/diagram-topology-render.json
+```
+
+`.dot` 是可复核源文件，`.svg` 是正式渲染结果。控制器校验 `analysis_id`、框图哈希、Graphviz 渲染器、文件扩展名、SVG 内容和文件 SHA-256；任一项不符都不能进入下一阶段。
+
+### 4. 完成 Block 实现映射
 
 ```bash
 python scripts/consistency_controller.py next \
@@ -89,7 +109,7 @@ DISCOVER_BLOCK_CANDIDATES
 
 此时先不要进入目标边结论；必须执行下一阶段的原始接口盘点。
 
-### 4. 逆向并冻结原理图原始接口
+### 5. 逆向并冻结原理图原始接口
 
 调用 `schematic-diff-interface-extractor`，以当前一致性状态初始化，并启用 `include-all-selected`。这表示盘点所有已选 Block 实现，不是只盘点差异器件。
 
@@ -115,7 +135,7 @@ python scripts/consistency_controller.py record-interface-inventory \
 
 未完成覆盖时可以继续一致性调查，但最终答案必须标为部分覆盖；不能把未观察到解释为不存在。
 
-### 5. 映射 Port 并验证目标拓扑
+### 6. 映射 Port 并验证目标拓扑
 
 恢复 `consistency_controller.py next`，使用已冻结的接口事实帮助完成 Port 映射和目标边验证。不要重新查询后覆盖原始接口事实。依据协议转换成精简 JSON，再使用对应子命令提交：
 
@@ -131,7 +151,7 @@ submit-dependencies
 
 控制器负责候选排序、阈值、差值、轮次、去重和阶段推进。
 
-### 6. 形成逐信号增删改结论
+### 7. 形成逐信号增删改结论
 
 使用 `scripts/interface_delta.py` 合并一致性状态与 `original-interfaces.json`：
 
@@ -148,7 +168,7 @@ python scripts/interface_delta.py build \
 
 若新增/修改包含新增器件、增加连线或源端 Pin 重新分配，调用 `diagram-logical-connection-mapping`。该 Skill 输出 Pin 映射，不负责网络命名；其结果回填后再生成最终答案。
 
-### 7. 生成四类中间产物
+### 8. 生成四类中间产物
 
 按 [四类中间产物协议](references/middleware-artifacts.md) 生成并检查：
 
@@ -161,7 +181,7 @@ python scripts/interface_delta.py build \
 
 先使用 `render_block_diff.py` 生成差异模型与 Graphviz 图，再使用 `build_middleware.py` 拆分第 2～4 项并生成 `middleware-manifest.json`。正式交付要求 manifest 的 `complete=true`。
 
-### 8. 查看进度
+### 9. 查看进度
 
 ```bash
 python scripts/consistency_controller.py status --state <state.json>
@@ -169,7 +189,7 @@ python scripts/consistency_controller.py status --state <state.json>
 
 不要依靠对话记忆估算完成度，以状态文件为准。
 
-### 9. 生成一份最终答案
+### 10. 生成一份最终答案
 
 ```bash
 python scripts/consistency_controller.py report \

@@ -165,6 +165,7 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
     write_csv(target_csv, targets, ["source_block_id", "source_block_name", "source_port", "destination_block_id", "destination_block_name", "destination_port", "schematic_source_pin_name", "analysis", "mapping_confidence", "network_name", "network_operation", "status", "evidence"])
 
     paths = [
+        artifact(Path(args.diagram_topology_result)), artifact(Path(args.diagram_topology_dot)), artifact(Path(args.diagram_topology_svg)),
         artifact(Path(args.block_diff_json)), artifact(Path(args.block_diff_dot)), artifact(Path(args.block_diff_svg)),
         artifact(original_json), artifact(original_csv), artifact(mapping_json), artifact(mapping_md), artifact(target_json), artifact(target_csv),
     ]
@@ -184,7 +185,7 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
     }
     write_json(output / "middleware-manifest.json", manifest)
     if args.require_xlsx and not complete:
-        raise ValueError("中间产物未完成：Graphviz SVG 或两份 Excel 缺失；详见 middleware-manifest.json")
+        raise ValueError("中间产物未完成：框图拓扑/差异 Graphviz 文件或两份 Excel 缺失；详见 middleware-manifest.json")
     return manifest
 
 
@@ -202,9 +203,13 @@ def self_test() -> None:
         root = Path(temp)
         for name, payload in (("state.json", state), ("answer.json", answer), ("block.json", block)):
             write_json(root / name, payload)
+        write_json(root / "topology.json", {"analysis_id": "T", "renderer": "graphviz-dot"})
+        (root / "topology.dot").write_text("digraph{}", encoding="utf-8")
+        (root / "topology.svg").write_text("<svg/>", encoding="utf-8")
         (root / "block.dot").write_text("digraph{}", encoding="utf-8")
         (root / "block.svg").write_text("<svg/>", encoding="utf-8")
         args = argparse.Namespace(consistency_state=str(root / "state.json"), answer=str(root / "answer.json"),
+            diagram_topology_result=str(root / "topology.json"), diagram_topology_dot=str(root / "topology.dot"), diagram_topology_svg=str(root / "topology.svg"),
             block_diff_json=str(root / "block.json"), block_diff_dot=str(root / "block.dot"), block_diff_svg=str(root / "block.svg"),
             output_dir=str(root / "out"), original_xlsx=None, modified_xlsx=None, require_xlsx=False)
         manifest = build(args)
@@ -220,6 +225,9 @@ def main() -> int:
     parser.add_argument("command", choices=["build", "self-test"])
     parser.add_argument("--consistency-state")
     parser.add_argument("--answer")
+    parser.add_argument("--diagram-topology-result")
+    parser.add_argument("--diagram-topology-dot")
+    parser.add_argument("--diagram-topology-svg")
     parser.add_argument("--block-diff-json")
     parser.add_argument("--block-diff-dot")
     parser.add_argument("--block-diff-svg")
@@ -232,7 +240,8 @@ def main() -> int:
         if args.command == "self-test":
             self_test()
             return 0
-        required = [args.consistency_state, args.answer, args.block_diff_json, args.block_diff_dot, args.block_diff_svg, args.output_dir]
+        required = [args.consistency_state, args.answer, args.diagram_topology_result, args.diagram_topology_dot,
+                    args.diagram_topology_svg, args.block_diff_json, args.block_diff_dot, args.block_diff_svg, args.output_dir]
         if not all(required):
             raise ValueError("build 缺少必要输入或输出目录")
         manifest = build(args)

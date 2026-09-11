@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any
 
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 TERMINAL_BLOCK_STATES = {"SELECTED", "UNRESOLVED", "HARD_CONFLICT"}
 TERMINAL_EDGE_STATES = {
     "VERIFIED",
@@ -68,6 +68,14 @@ def atomic_save(path: str | Path, value: Any) -> None:
         handle.write(payload)
         temp_name = handle.name
     os.replace(temp_name, target)
+
+
+def file_sha256(path: str | Path) -> str:
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def load_state(path: str | Path) -> dict[str, Any]:
@@ -400,6 +408,9 @@ def mapped_neighbor_blocks(block_id: str, state: dict[str, Any]) -> list[dict[st
 
 
 def determine_phase(state: dict[str, Any]) -> str:
+    topology_render = state["diagram_topology_render"]
+    if topology_render["status"] == "PENDING":
+        return "RENDER_DIAGRAM_TOPOLOGY"
     if state["budget"]["used"] >= state["budget"]["max"]:
         return "STOPPED_BUDGET"
     overview = state["schematic_overview"]
@@ -425,6 +436,23 @@ def determine_phase(state: dict[str, Any]) -> str:
 def schedule(state: dict[str, Any]) -> None:
     state["phase"] = determine_phase(state)
     if state["phase"] == "STOPPED_BUDGET":
+        return
+
+    if state["phase"] == "RENDER_DIAGRAM_TOPOLOGY":
+        new_action(
+            state,
+            "diagram:topology-render",
+            "RENDER_DIAGRAM_TOPOLOGY",
+            "diagram:current-target",
+            None,
+            {
+                "script": "scripts/render_diagram_topology.py",
+                "renderer": "graphviz-dot",
+                "required_outputs": ["diagram-topology.dot", "diagram-topology.svg", "diagram-topology-render.json"],
+                "目的": "在任何原理图查询和 Block 映射前，把已解析的当前框图拓扑渲染为 Graphviz SVG",
+                "提交命令": "record-topology-render",
+            },
+        )
         return
 
     if state["phase"] == "SCHEMATIC_OVERVIEW":
@@ -641,6 +669,10 @@ def command_init(args: argparse.Namespace) -> None:
             "summary": {"status": "PENDING", "result": None},
             "sheets": {"status": "PENDING", "result": None},
         },
+        "diagram_topology_render": {
+            "status": "PENDING",
+            "result": None,
+        },
         "interface_inventory": {
             "status": "PENDING",
             "result": None,
@@ -666,8 +698,48 @@ def command_next(args: argparse.Namespace) -> None:
     emit({"phase": state["phase"], "budget": state["budget"], "actions": actions})
 
 
+def command_record_topology_render(args: argparse.Namespace) -> None:
+    state = load_state(args.state)
+    result = parse_json_input(args.input, args.json)
+    if not isinstance(result, dict):
+        raise ValueError("拓扑渲染结果必须是 JSON 对象")
+    if result.get("analysis_id") != state["analysis_id"]:
+        raise ValueError("拓扑渲染结果的 analysis_id 与主状态不一致")
+    if result.get("diagram_sha256") != state.get("diagram_sha256"):
+        raise ValueError("拓扑渲染结果不是当前框图快照")
+    if result.get("renderer") != "graphviz-dot":
+        raise ValueError("框图拓扑必须由 Graphviz dot 渲染")
+    dot_path = Path(str(result.get("dot_file") or ""))
+    svg_path = Path(str(result.get("svg_file") or ""))
+    if not dot_path.is_file() or not svg_path.is_file():
+        raise ValueError("拓扑渲染缺少 .dot 或 .svg 文件")
+    if dot_path.suffix.lower() != ".dot" or svg_path.suffix.lower() != ".svg":
+        raise ValueError("拓扑渲染文件扩展名必须是 .dot 和 .svg")
+    svg_head = svg_path.read_text(encoding="utf-8", errors="ignore")[:4096]
+    if "<svg" not in svg_head:
+        raise ValueError("拓扑渲染结果不是有效 SVG")
+    actual_dot_hash = file_sha256(dot_path)
+    actual_svg_hash = file_sha256(svg_path)
+    if result.get("dot_sha256") != actual_dot_hash or result.get("svg_sha256") != actual_svg_hash:
+        raise ValueError("拓扑渲染文件哈希与结果声明不一致")
+    state["diagram_topology_render"] = {
+        "status": "COMPLETE",
+        "result": copy.deepcopy(result),
+    }
+    complete_action_by_key(state, "diagram:topology-render")
+    state["events"].append(
+        {"at": now_iso(), "type": "DIAGRAM_TOPOLOGY_RENDER", "status": "COMPLETE"}
+    )
+    schedule(state)
+    touch(state)
+    atomic_save(args.state, state)
+    emit(state_summary(state))
+
+
 def command_record_overview(args: argparse.Namespace) -> None:
     state = load_state(args.state)
+    if state["diagram_topology_render"]["status"] != "COMPLETE":
+        raise ValueError("必须先完成当前框图拓扑的 Graphviz 渲染")
     result = parse_json_input(args.input, args.json)
     key = "summary" if args.kind == "summary" else "sheets"
     state["schematic_overview"][key] = {"status": args.status, "result": result}
@@ -992,6 +1064,7 @@ def state_summary(state: dict[str, Any]) -> dict[str, Any]:
             "issues": len(state["target"]["issues"]),
         },
         "progress": {
+            "diagram_topology_render": state["diagram_topology_render"]["status"],
             "blocks_selected": sum(item["status"] == "SELECTED" for item in blocks),
             "blocks_unresolved": sum(item["status"] in {"UNRESOLVED", "HARD_CONFLICT"} for item in blocks),
             "ports_mapped": sum(item["status"] == "MAPPED" for item in ports),
@@ -1036,12 +1109,22 @@ def markdown_report(state: dict[str, Any]) -> str:
         f"- 总体状态：`{overall}`",
         f"- 分析 ID：`{state['analysis_id']}`",
         f"- 当前阶段：`{determine_phase(state)}`",
+        f"- 框图拓扑 Graphviz：`{state['diagram_topology_render']['status']}`",
         f"- 查询预算：{state['budget']['used']}/{state['budget']['max']}",
         f"- Block：{summary['progress']['blocks_selected']}/{summary['target_counts']['blocks']} 已映射",
         f"- 原始信号接口清单：`{state['interface_inventory']['status']}`",
         f"- Port：{summary['progress']['ports_mapped']}/{summary['target_counts']['ports']} 已映射",
         f"- 目标边：{summary['progress']['edges_verified']}/{summary['target_counts']['edges']} 已通过 chain_check",
         "- 说明：本报告采用目标驱动的局部查询，不代表枚举了完整原理图。",
+        "",
+        "## 当前框图拓扑渲染",
+        "",
+        "| 状态 | DOT | SVG | 渲染器 |",
+        "|---|---|---|---|",
+        f"| {state['diagram_topology_render']['status']} | "
+        f"{(state['diagram_topology_render'].get('result') or {}).get('dot_file', '-')} | "
+        f"{(state['diagram_topology_render'].get('result') or {}).get('svg_file', '-')} | "
+        f"{(state['diagram_topology_render'].get('result') or {}).get('renderer', '-')} |",
         "",
         "## 目标框图数据质量问题",
         "",
@@ -1239,6 +1322,34 @@ def self_test() -> None:
                     select_margin=0.12,
                 )
             )
+            initial_state = load_state(state_path)
+            assert determine_phase(initial_state) == "RENDER_DIAGRAM_TOPOLOGY"
+            assert any(
+                item["kind"] == "RENDER_DIAGRAM_TOPOLOGY"
+                for item in pending_actions(initial_state)
+            )
+            topology_dot = Path(temp_dir) / "diagram-topology.dot"
+            topology_svg = Path(temp_dir) / "diagram-topology.svg"
+            topology_dot.write_text("digraph diagram_topology {}\n", encoding="utf-8")
+            topology_svg.write_text("<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>\n", encoding="utf-8")
+            command_record_topology_render(
+                argparse.Namespace(
+                    state=str(state_path),
+                    input=None,
+                    json=json.dumps(
+                        {
+                            "analysis_id": "self-test",
+                            "diagram_sha256": initial_state["diagram_sha256"],
+                            "renderer": "graphviz-dot",
+                            "dot_file": str(topology_dot),
+                            "svg_file": str(topology_svg),
+                            "dot_sha256": file_sha256(topology_dot),
+                            "svg_sha256": file_sha256(topology_svg),
+                        }
+                    ),
+                )
+            )
+            assert determine_phase(load_state(state_path)) == "SCHEMATIC_OVERVIEW"
             for kind in ("summary", "sheets"):
                 command_record_overview(
                     argparse.Namespace(
@@ -1356,7 +1467,7 @@ def self_test() -> None:
         assert determine_phase(final_state) == "DONE"
         assert final_state["target"]["edges"]["31"]["status"] == "VERIFIED"
         assert "`CONSISTENT`" in markdown_report(final_state)
-    emit({"self_test": "PASS", "tests": 11})
+    emit({"self_test": "PASS", "tests": 14})
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1383,6 +1494,14 @@ def build_parser() -> argparse.ArgumentParser:
     next_cmd.add_argument("--state", required=True)
     next_cmd.add_argument("--limit", type=int, default=2)
     next_cmd.set_defaults(func=command_next)
+
+    topology = sub.add_parser(
+        "record-topology-render", help="登记 Graphviz 生成的当前框图拓扑 DOT/SVG"
+    )
+    topology.add_argument("--state", required=True)
+    topology.add_argument("--input")
+    topology.add_argument("--json")
+    topology.set_defaults(func=command_record_topology_render)
 
     overview = sub.add_parser("record-overview", help="记录概要或图页查询结果")
     overview.add_argument("--state", required=True)

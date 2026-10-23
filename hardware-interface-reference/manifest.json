@@ -1,0 +1,340 @@
+{
+  "version": "0.1.0",
+  "date": "2026-10-22",
+  "status": "draft",
+  "interface_count": 33,
+  "source_count": 33,
+  "interfaces": [
+    {
+      "slug": "spi",
+      "name": "SPI",
+      "desc": "同步串行外设接口匹配，覆盖单从机、独立片选多从机及三线/菊花链例外。",
+      "family": "pushpull",
+      "sources": [
+        "SPI",
+        "QSPI"
+      ]
+    },
+    {
+      "slug": "iic",
+      "name": "IIC（I2C）",
+      "desc": "两线寻址总线匹配，覆盖上拉、地址冲突、时钟延展和分段。",
+      "family": "opendrain",
+      "sources": [
+        "I2C"
+      ]
+    },
+    {
+      "slug": "espi",
+      "name": "eSPI（ESPI）",
+      "desc": "Intel Enhanced Serial Peripheral Interface 的分时双向 IO、片选、复位及告警匹配；排除厂商同名增强 SPI。",
+      "family": "bidirectional",
+      "sources": [
+        "ESPI"
+      ]
+    },
+    {
+      "slug": "jtag",
+      "name": "JTAG",
+      "desc": "IEEE 1149.1 TAP 调试与边界扫描连接，覆盖单器件及多 TAP 菊花链。",
+      "family": "pushpull",
+      "sources": [
+        "CFG",
+        "LOCAL"
+      ]
+    },
+    {
+      "slug": "pmbus",
+      "name": "PMBus",
+      "desc": "电源管理 SMBus 物理连接、地址、告警、控制与命令能力核对。",
+      "family": "opendrain",
+      "sources": [
+        "PMBUS",
+        "SMBUS",
+        "PMDEV"
+      ]
+    },
+    {
+      "slug": "mdio",
+      "name": "MDIO",
+      "desc": "Ethernet 管理总线 MDC/MDIO 匹配，覆盖 Clause 22/45、地址与换向。",
+      "family": "opendrain",
+      "sources": [
+        "PHY100",
+        "PHY1G"
+      ]
+    },
+    {
+      "slug": "smbus",
+      "name": "SMBus（Smbus）",
+      "desc": "系统管理两线总线匹配，核对电气类别、时序、超时、PEC 和告警。",
+      "family": "opendrain",
+      "sources": [
+        "SMBUS",
+        "I2C"
+      ]
+    },
+    {
+      "slug": "localbus",
+      "name": "LocalBus",
+      "desc": "并行本地总线地址、数据、读写、片选与握手匹配；区分厂商控制器及复用模式。",
+      "family": "bidirectional",
+      "sources": [
+        "LOCAL"
+      ]
+    },
+    {
+      "slug": "ddrx",
+      "name": "DDRx",
+      "desc": "DDR 分代匹配，覆盖 Byte Lane、Rank、命令地址、参考、终端与训练。",
+      "family": "memory",
+      "sources": [
+        "DDR",
+        "DDR5"
+      ]
+    },
+    {
+      "slug": "qspi",
+      "name": "QSPI",
+      "desc": "Quad SPI 四位 IO、指令阶段、片选、启动与复用保护脚匹配。",
+      "family": "bidirectional",
+      "sources": [
+        "QSPI",
+        "SPI"
+      ]
+    },
+    {
+      "slug": "uart",
+      "name": "串口（UART）",
+      "desc": "逻辑 UART TX/RX 及流控匹配，区分外部 RS-232/RS-485 电气层。",
+      "family": "pushpull",
+      "sources": [
+        "UART",
+        "LOGIC"
+      ]
+    },
+    {
+      "slug": "mii",
+      "name": "MII",
+      "desc": "MII MAC–PHY 并行数据、时钟和管理旁带匹配。",
+      "family": "pushpull",
+      "sources": [
+        "PHY100",
+        "PHY1G"
+      ]
+    },
+    {
+      "slug": "rmii",
+      "name": "RMII",
+      "desc": "RMII MAC–PHY 并行数据、时钟和管理旁带匹配。",
+      "family": "pushpull",
+      "sources": [
+        "PHY100",
+        "PHY1G"
+      ]
+    },
+    {
+      "slug": "gmii",
+      "name": "GMII",
+      "desc": "GMII MAC–PHY 并行数据、时钟和管理旁带匹配。",
+      "family": "pushpull",
+      "sources": [
+        "PHY100",
+        "PHY1G"
+      ]
+    },
+    {
+      "slug": "can",
+      "name": "CAN",
+      "desc": "CAN 控制器逻辑端、收发器与物理总线匹配；区分经典 CAN、CAN FD 和其他物理层。",
+      "family": "transceiver",
+      "sources": [
+        "CAN"
+      ]
+    },
+    {
+      "slug": "rs485",
+      "name": "RS485（RS-485）",
+      "desc": "RS-485 半/全双工收发器、极性、使能、端接与失效保护匹配。",
+      "family": "transceiver",
+      "sources": [
+        "RS485",
+        "RS422"
+      ]
+    },
+    {
+      "slug": "rs422",
+      "name": "RS422（RS-422）",
+      "desc": "RS-422 单发送器多接收器差分链路、双向双链路及端接匹配。",
+      "family": "transceiver",
+      "sources": [
+        "RS422"
+      ]
+    },
+    {
+      "slug": "usb2",
+      "name": "USB2.0",
+      "desc": "USB2.0 Host/Device、数据物理线、VBUS 与多设备 Hub 连接；Type-C 另核对角色和翻转。",
+      "family": "usb",
+      "sources": [
+        "USB",
+        "USB3",
+        "HUB",
+        "HS"
+      ]
+    },
+    {
+      "slug": "usb3",
+      "name": "USB3.0",
+      "desc": "USB3.0 Host/Device、数据物理线、VBUS 与多设备 Hub 连接；Type-C 另核对角色和翻转。",
+      "family": "usb",
+      "sources": [
+        "USB",
+        "USB3",
+        "HUB",
+        "HS"
+      ]
+    },
+    {
+      "slug": "gpio",
+      "name": "基础数字信号（GPIO 等）",
+      "desc": "GPIO、使能、复位、中断及开漏共享信号的方向、电平和默认态匹配。",
+      "family": "mixed",
+      "sources": [
+        "LOGIC",
+        "TXS",
+        "TXU"
+      ]
+    },
+    {
+      "slug": "afe",
+      "name": "射频差分信号（AFE 相关）",
+      "desc": "AFE/ADC/DAC 模拟差分链路的幅度、共模、带宽、匹配及单双端转换分析。",
+      "family": "analog",
+      "sources": [
+        "AFE"
+      ]
+    },
+    {
+      "slug": "cfg",
+      "name": "CFG（FPGA 加载信号）",
+      "desc": "FPGA 配置模式、加载数据、握手、启动电源域和多器件加载链匹配。",
+      "family": "mixed",
+      "sources": [
+        "CFG",
+        "QSPI"
+      ]
+    },
+    {
+      "slug": "tbus",
+      "name": "TBus",
+      "desc": "TBus 项目接口规则采集与匹配入口；先绑定内部定义，未绑定前不输出实际连线。",
+      "family": "unknown",
+      "sources": [
+        "HS"
+      ]
+    },
+    {
+      "slug": "cpri",
+      "name": "CPRI",
+      "desc": "基带 REC 与射频 RE 的串行前传链路及光/电模块匹配。",
+      "family": "serdes",
+      "sources": [
+        "CPRI",
+        "HS"
+      ]
+    },
+    {
+      "slug": "eth",
+      "name": "ETH（Ethernet）",
+      "desc": "以太网接口总入口，先识别 MAC–PHY、铜缆 MDI、光模块或背板物理层，再调用对应匹配规则。",
+      "family": "ethernet",
+      "sources": [
+        "ETH",
+        "PHY100",
+        "PHY1G",
+        "XGE"
+      ]
+    },
+    {
+      "slug": "ecpri",
+      "name": "eCPRI",
+      "desc": "基于 Ethernet/IP 的无线前传业务映射与其底层硬件链路匹配；不定义独立 eCPRI 电气引脚。",
+      "family": "ethernet",
+      "sources": [
+        "ECPRI",
+        "ETH",
+        "XGE"
+      ]
+    },
+    {
+      "slug": "204x",
+      "name": "204X（待绑定 JESD204x）",
+      "desc": "保留用户 204X 名称；若内部定义确认为 JESD204 系列，按版本、Subclass、lane 和同步匹配。",
+      "family": "serdes",
+      "sources": [
+        "JESDB",
+        "JESDC",
+        "HS"
+      ]
+    },
+    {
+      "slug": "idx1",
+      "name": "背板高速 IDX1",
+      "desc": "背板高速 IDX1 项目接口规则采集与匹配入口；先绑定内部定义，未绑定前不输出实际连线。",
+      "family": "unknown",
+      "sources": [
+        "HS"
+      ]
+    },
+    {
+      "slug": "idx2",
+      "name": "背板高速 IDX2",
+      "desc": "背板高速 IDX2 项目接口规则采集与匹配入口；先绑定内部定义，未绑定前不输出实际连线。",
+      "family": "unknown",
+      "sources": [
+        "HS"
+      ]
+    },
+    {
+      "slug": "udx",
+      "name": "背板高速 UDX",
+      "desc": "背板高速 UDX 项目接口规则采集与匹配入口；先绑定内部定义，未绑定前不输出实际连线。",
+      "family": "unknown",
+      "sources": [
+        "HS"
+      ]
+    },
+    {
+      "slug": "xge",
+      "name": "XGE（10 Gigabit Ethernet）",
+      "desc": "万兆以太网接口入口，区分 XGMII、XAUI、XFI/SFI、10GBASE-KR/SR/LR/T 等链路段。",
+      "family": "serdes",
+      "sources": [
+        "XGE",
+        "ETH",
+        "HS"
+      ]
+    },
+    {
+      "slug": "pcie",
+      "name": "PCIe",
+      "desc": "PCI Express 根端口、端点/交换机数据 lane、参考时钟与复位旁带匹配。",
+      "family": "serdes",
+      "sources": [
+        "PCIE",
+        "HS"
+      ]
+    },
+    {
+      "slug": "srio",
+      "name": "SRIO",
+      "desc": "Serial RapidIO 端点/交换机端口、lane 分组、初始化及参考时钟匹配。",
+      "family": "serdes",
+      "sources": [
+        "SRIO",
+        "HS"
+      ]
+    }
+  ]
+}

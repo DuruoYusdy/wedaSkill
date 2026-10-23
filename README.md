@@ -4,7 +4,7 @@
 
 | 目录 | 内容 |
 | --- | --- |
-| [hardware-interface-reference](hardware-interface-reference/README.md) | 33 项硬件接口匹配参考文档，含 SKILL、SPEC、连接矩阵、检查清单、来源及合并阅读版。 |
+| [hardware-interface-reference](hardware-interface-reference/README.md) | 33 项硬件接口参考文档，每项一个 XX.md 文件（如 SPI.md），包含匹配流程、规则、连接矩阵、检查清单及来源。 |
 | [schematic-consistency-controller](schematic-consistency-controller/SKILL.md) | 框图与旧原理图一致性分析技能。 |
 | [schematic-diff-interface-extractor](schematic-diff-interface-extractor/SKILL.md) | 原理图信号接口逆向盘点和差异提取技能。 |
 
